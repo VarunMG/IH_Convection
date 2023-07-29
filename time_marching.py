@@ -6,6 +6,12 @@ from matplotlib import cm
 logger = logging.getLogger(__name__)
 
 
+def calc_Nu(b_var):
+    temp_field = b_var['g'].T
+    vert_means = np.mean(temp_field,axis=1)
+    return 1/(8*np.max(vert_means))
+    
+
 # Parameters
 #Lx, Lz = 4, 1
 #Lz = 2
@@ -131,7 +137,7 @@ try:
         solver.step(timestep)
         if (solver.iteration-1) % 10 == 0:
             #max_Re = flow.max('Re')
-            flow_Nu = flow.volume_integral('Nu')/volume
+            flow_Nu = calc_Nu(b)
             #logger.info('Iteration=%i, Time=%e, dt=%e, max Re=%f' %(solver.iteration, solver.sim_time, timestep, max_Re))
             logger.info('Iteration=%i, Time=%e, dt=%e, Nu=%f' %(solver.iteration, solver.sim_time, timestep, flow_Nu))
 except:
