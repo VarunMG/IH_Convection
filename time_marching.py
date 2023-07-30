@@ -20,15 +20,29 @@ def writeNu(fileName,tVals,NuVals):
     except:
         return 0
 
+def writeFields(fileName,time,b_var,u_var,v_var):
+    b_var.change_scales(1)
+    u_var.change_scales(1)
+    v_var.change_scales(1)
+    try:
+        with open(fileName,'wb') as fluidData:
+            np.save(fluidData,time)
+            np.save(fluidData,b_var.allgather_data('g').T)
+            np.save(fluidData,u_var.allgather_data('g').T)
+            np.save(fluidData,v_var.allgather_data('g').T)
+        return 1
+    except:
+        return 0
+
 # Parameters
 #Lx, Lz = 4, 1
 #Lz = 2
 alpha = 3.9989
-Nx, Nz = 1024, 512
+Nx, Nz = 512, 256
 Rayleigh = 40000
 Prandtl = 100
 dealias = 3/2
-stop_sim_time = 5
+stop_sim_time = 20
 timestepper = d3.RK443
 max_timestep = 0.1
 dtype = np.float64
@@ -141,6 +155,8 @@ startup_iter = 10
 tVals = []
 NuVals = []
 NuFileName = 'NuData.npy'
+fluidDataFileName = 'runOutput/fluidData'
+
 try:
     logger.info('Starting main loop')
     while solver.proceed:
@@ -152,6 +168,11 @@ try:
             #max_Re = flow.max('Re')
             #logger.info('Iteration=%i, Time=%e, dt=%e, max Re=%f' %(solver.iteration, solver.sim_time, timestep, max_Re))
             logger.info('Iteration=%i, Time=%e, dt=%e, Nu=%f' %(solver.iteration, solver.sim_time, timestep, flow_Nu))
+        if (solver.iteration-1) % 100 == 0:
+            fileName = fluidDataFileName + str(round(10000*solver.sim_time)/10000) + '.npy'
+            write = writeFields(fileName,solver.sim_time,b,u,v)
+            if write == 0:
+                print('fields are not writing')
         tVals.append(solver.sim_time)
         NuVals.append(flow_Nu)
 except:
