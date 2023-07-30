@@ -6,21 +6,29 @@ from matplotlib import cm
 logger = logging.getLogger(__name__)
 
 
-def calc_Nu(b_var):
-    temp_field = b_var['g'].T
-    vert_means = np.mean(temp_field,axis=1)
+def calcNu(b_var):
+    temp_field = b_var.allgather_data('g')
+    vert_means = np.mean(temp_field.T,axis=1)
     return 1/(8*np.max(vert_means))
     
+def writeNu(fileName,tVals,NuVals):
+    try:
+        with open(fileName,'wb') as NuData:
+            np.save(NuData,tVals)
+            np.save(NuData,NuVals)
+        return 1
+    except:
+        return 0
 
 # Parameters
 #Lx, Lz = 4, 1
 #Lz = 2
 alpha = 3.9989
-Nx, Nz = 512, 256
+Nx, Nz = 1024, 512
 Rayleigh = 40000
 Prandtl = 100
 dealias = 3/2
-stop_sim_time = 100
+stop_sim_time = 5
 timestepper = d3.RK443
 max_timestep = 0.1
 dtype = np.float64
@@ -130,16 +138,22 @@ volume = ((2*np.pi)/alpha)*2
 
 # Main loop
 startup_iter = 10
+tVals = []
+NuVals = []
+NuFileName = 'NuData.npy'
 try:
     logger.info('Starting main loop')
     while solver.proceed:
         timestep = CFL.compute_timestep()
         solver.step(timestep)
+        flow_Nu = calcNu(b)
         if (solver.iteration-1) % 10 == 0:
+            writeNu(NuFileName,tVals,NuVals)
             #max_Re = flow.max('Re')
-            flow_Nu = calc_Nu(b)
             #logger.info('Iteration=%i, Time=%e, dt=%e, max Re=%f' %(solver.iteration, solver.sim_time, timestep, max_Re))
             logger.info('Iteration=%i, Time=%e, dt=%e, Nu=%f' %(solver.iteration, solver.sim_time, timestep, flow_Nu))
+        tVals.append(solver.sim_time)
+        NuVals.append(flow_Nu)
 except:
     logger.error('Exception raised, triggering end of main loop.')
     raise
