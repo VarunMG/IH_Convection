@@ -68,13 +68,12 @@ class Laplacian_Problem:
         
 
 class IH_Problem:
-    def __init__(self,Ra,Pr,alpha,Nx,Nz,bcs,time_step=None,initial_u=None,initial_v=None,initial_phi=None,initial_b=None):
+    def __init__(self,Ra,Pr,alpha,Nx,Nz,time_step=None,initial_u=None,initial_v=None,initial_phi=None,initial_b=None):
         self.Ra = Ra
         self.Pr = Pr
         self.alpha = alpha
         self.Nx = Nx
         self.Nz = Nz
-        self.bcs = bcs
         self.time_step = time_step
         self.time = 0
         
@@ -264,7 +263,7 @@ class IH_Problem:
                         plt.savefig(image_name)
                         plt.clf()
                         framecount += 1
-                    flow_Nu = self.flow.volume_integral('Nu')/self.volume
+                    flow_Nu = self.calc_Nu()
                     if trackNu:
                          self.tVals.append(self.solver.sim_time)
                          self.NuVals.append(flow_Nu)
@@ -279,8 +278,9 @@ class IH_Problem:
         self.time = end_time
     
     def calc_Nu(self):
-        Nu = self.flow.volume_integral('Nu')/self.volume
-        return Nu
+        bArr = self.b.allgather_data('g')
+        vert_means = np.mean(bArr.T,axis=1)
+        return 1/(8*np.max(vert_means))
     
     def plot(self):
         X,Z = np.meshgrid(self.x.ravel(),self.z.ravel())
@@ -505,7 +505,7 @@ def follow_branch():
     filename_end = 'Pr7alpha1.5585Nx128Nz64data.npy'
     #filename = 'branch_tester/Pr100'
     for Ra in RaVals:
-        steady = RBC_Problem(Ra,7,1.5585,Nx,Nz,'RB1',time_step=dt)
+        steady = IH_Problem(Ra,7,1.5585,Nx,Nz,'RB1',time_step=dt)
         steady.initialize()
         iters = steady_state_finder(steady, guess, 2, 1e-5, 50, False)
         #print('Ra= ',Ra)
@@ -544,7 +544,7 @@ def optimize_alpha():
 
     file_path = 'optimization_outputs/Ra45000/Pr7/Ra'+ str(Ra)+'Pr'+str(Pr)+'alpha' 
     for alpha in alpha_vals:
-        steady = RBC_Problem(Ra,Pr,alpha,Nx,Nz,'RB1',time_step=dt)
+        steady = IH_Problem(Ra,Pr,alpha,Nx,Nz,'RB1',time_step=dt)
         steady.initialize()
         iters = steady_state_finder(steady, guess, 2, 1e-7, 50, False)
         print('alpha= ', alpha)
