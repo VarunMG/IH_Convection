@@ -188,9 +188,9 @@ class IH_Problem:
             self.phi.load_from_global_grid_data(self.init_phi)
         
         #if no initial conditions given, use a perturbed conduction state
-        self.b.fill_random('g', seed=42, distribution='normal', scale=1e-5) # Random noise
-        self.b['g'] *= self.z * (1 - self.z) # Damp noise at walls
-        # self.b['g'] += 0.01*np.cos((1/2)*np.pi*self.x)*np.sin(np.pi*self.z*self.alpha)
+        #self.b.fill_random('g', seed=42, distribution='normal', scale=1e-5) # Random noise
+        #self.b['g'] *= self.z * (1 - self.z) # Damp noise at walls
+        self.b['g'] += 0.05*np.cos((1/2)*np.pi*self.x)*np.sin(np.pi*self.z*self.alpha)
         self.b['g'] += self.conduction_state() # Add appropriate conduction state
         self.init_u = np.copy(self.u['g'])
         self.init_v = np.copy(self.v['g'])
