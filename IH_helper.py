@@ -190,7 +190,7 @@ class IH_Problem:
         #if no initial conditions given, use a perturbed conduction state
         #self.b.fill_random('g', seed=42, distribution='normal', scale=1e-5) # Random noise
         #self.b['g'] *= self.z * (1 - self.z) # Damp noise at walls
-        self.b['g'] += 0.05*np.cos((1/2)*np.pi*self.x)*np.sin(np.pi*self.z*self.alpha)
+        self.b['g'] += 0.05*np.cos((1/2)*np.pi*(self.x-self.alpha))*np.sin(np.pi*self.z*self.alpha)
         self.b['g'] += self.conduction_state() # Add appropriate conduction state
         self.init_u = np.copy(self.u['g'])
         self.init_v = np.copy(self.v['g'])
@@ -199,9 +199,9 @@ class IH_Problem:
         
         
         ##defining timestepper
-        timestepper = d3.RK222
+        timestepper = d3.RK443
         self.solver = self.problem.build_solver(timestepper)
-        max_timestep = 0.05
+        max_timestep = 0.005
         
         # CFL
         self.CFL = d3.CFL(self.solver, initial_dt=max_timestep, cadence=10, safety=0.5, threshold=0.05,
@@ -430,6 +430,7 @@ def stateToArrs(X,Nx,Nz):
     return phiArr, bArr
 
 def Gt(X,T,problem):
+    print("being called!")
     phiArr, bArr = stateToArrs(X,problem.Nx,problem.Nz)
     uArr, vArr = problem.phi_lap.getVel(phiArr)
     problem.time = 0
@@ -437,7 +438,7 @@ def Gt(X,T,problem):
     problem.u.load_from_global_grid_data(uArr)
     problem.v.load_from_global_grid_data(vArr)
     problem.b.load_from_global_grid_data(bArr)
-    problem.solve_system(T)
+    problem.solve_system(T,False, False, True)
     Gt_Vec = probToStateVec(problem)
     Gt_Vec = (Gt_Vec - X)/T
     return Gt_Vec
@@ -454,7 +455,7 @@ def jac_approx(X,dX,F,T,problem):
     return (GtArr + F.T)/eps
 
 
-def steady_state_finder(problem,guess,T,tol,max_iters,write):
+def findSteadyState(problem,guess,T,tol,max_iters,write):
     #problem is an RBC_problem
     #guess is a guess for the state vec
     #T is time we are integrating out to
@@ -472,42 +473,47 @@ def steady_state_finder(problem,guess,T,tol,max_iters,write):
             print("iter: ",iters)
             print(X)
             print("-------------")
-
+        print("made it here 1")
         F = -1*Gt(X,T,problem)
+        print("made it here 2")
         A = lambda dX : jac_approx(X,dX,F,T,problem)
         A_mat = LinearOperator((2*Nx*Nz,2*Nx*Nz),A)
         delta_X,code =gmres(A_mat,F,tol=1e-3)
+        print("made it here 3")
         #print(delta_X)
         if code != 0:
             raise("gmres did not converge")
         X= X+delta_X
         logging.info("Completed iteration: %i", iters)
         iters += 1
+        print("made it here 4")
         err = np.linalg.norm(Gt(X,T,problem))
+        print("made it here 5")
+        print("---------------")
     phiStead, bStead = stateToArrs(X,Nx,Nz)
     problem.phi.load_from_global_grid_data(phiStead)
     problem.b.load_from_global_grid_data(bStead)
     return iters
 
-
-def follow_branch():
-    RaVals = np.arange(3e3,5e4,5.5e2)
+def follow_branch(Pr,alpha,Ra_start,Ra_end,Ra_step, Nx, Nz, startingGuess, starting_dt, tol):
+    #Ra_start is starting Rayleigh number
+    #Ra_end is the ending Rayleigh number
+    #Ra_step is the step in Ra taken when increasing Ra
+    RaVals = np.arange(Ra_start,Ra_end,Ra_step)
     #RaVals = np.arange(49750,6e4,5e2)
     steady_states = []
     Nu_Vals = []
-    Nx = 128
-    Nz = 64
-    uArr,vArr,bArr, phiArr,dt = open_fields('RB1_steady_states/Pr7/primary_box/Ra2000Pr7alpha1.5585Nx128Nz64data.npy')
-    guess = arrsToStateVec(phiArr, bArr)
+    guess = startingGuess
+    dt = starting_dt
     #guess = np.zeros(2*Nx*Nz)
     #dt = 0.125
-    filename_start = 'RB1_steady_states/Pr7_redo/primary_box/'
-    filename_end = 'Pr7alpha1.5585Nx128Nz64data.npy'
+    #filename_start = 'RB1_steady_states/Pr7_redo/primary_box/'
+    filename_end = 'Pr'+str(Pr)+'alpha'+str(alpha)+'Nx' + str(Nx) + 'Nz' + str(Nz) + '_SS.npy'
     #filename = 'branch_tester/Pr100'
     for Ra in RaVals:
-        steady = IH_Problem(Ra,7,1.5585,Nx,Nz,'RB1',time_step=dt)
+        steady = IH_Problem(Ra,Pr,alpha,Nx,Nz,time_step=dt)
         steady.initialize()
-        iters = steady_state_finder(steady, guess, 2, 1e-5, 50, False)
+        iters = findSteadyState(steady, guess, 2, tol, 50, False)
         #print('Ra= ',Ra)
         #print('steady state found . Iters = ', iters)
         steady_states.append(steady)
@@ -516,7 +522,7 @@ def follow_branch():
         logging.info("Ra= %i", Ra)
         logging.info('Steady State Found. Iters = %i', iters)
         logging.info("Nu= %f", Nu)
-        saveFile = filename_start +'Ra'+str(Ra)+filename_end
+        saveFile = 'Ra'+str(Ra)+filename_end
         #saveFile = filename+'Ra'+str(Ra)+'.npy'
         steady.saveToFile(saveFile)
         
@@ -529,8 +535,7 @@ def follow_branch():
     print(RaVals)
     print(Nu_Vals)
     return RaVals, Nu_Vals, steady_states
-        
-    
+
 def optimize_alpha():
     Ra = 45000
     Pr = 7
