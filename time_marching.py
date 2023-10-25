@@ -6,11 +6,12 @@ from matplotlib import cm
 logger = logging.getLogger(__name__)
 
 
+
 def calcNu(b_var):
     temp_field = b_var.allgather_data('g')
     vert_means = np.mean(temp_field.T,axis=1)
     return 1/(8*np.max(vert_means))
-    
+
 def writeNu(fileName,tVals,NuVals):
     try:
         with open(fileName,'wb') as NuData:
@@ -20,31 +21,45 @@ def writeNu(fileName,tVals,NuVals):
     except:
         return 0
 
+def getVerticalMeans(b_var):
+    b_var.change_scales(1)
+    temp_field = b_var.allgather_data('g')
+    vert_means = np.mean(temp_field.T,axis=1)
+    return vert_means
+
+def writeVertMeans(fileName,time,b_var):
+    vertMeans = getVerticalMeans(b_var)
+    with open(fileName, 'wb') as vertMeanData:
+        np.save(vertMeanData,time)
+        np.save(vertMeanData,vertMeans)
+
+def writeAllVertMeans(fileName,vertMeanData):
+    with open(fileName, 'wb') as vertMeanFile:
+        np.save(vertMeanFile,vertMeanData)
+    return 1
+
 def writeFields(fileName,time,b_var,u_var,v_var):
     b_var.change_scales(1)
     u_var.change_scales(1)
     v_var.change_scales(1)
-    try:
-        with open(fileName,'wb') as fluidData:
-            np.save(fluidData,time)
-            np.save(fluidData,b_var.allgather_data('g').T)
-            np.save(fluidData,u_var.allgather_data('g').T)
-            np.save(fluidData,v_var.allgather_data('g').T)
-        return 1
-    except:
-        return 0
+    with open(fileName,'wb') as fluidData:
+        np.save(fluidData,time)
+        np.save(fluidData,b_var.allgather_data('g').T)
+        np.save(fluidData,u_var.allgather_data('g').T)
+        np.save(fluidData,v_var.allgather_data('g').T)
+    return 1
 
 # Parameters
 #Lx, Lz = 4, 1
 #Lz = 2
 alpha = 3.9989
 Nx, Nz = 512, 256
-Rayleigh = 50000
-Prandtl = 100
+Rayleigh = 10000000
+Prandtl = 7
 dealias = 3/2
-stop_sim_time = 20
+stop_sim_time = 10
 timestepper = d3.RK443
-max_timestep = 0.1
+max_timestep = 0.00001
 dtype = np.float64
 
 # Bases
@@ -122,9 +137,10 @@ solver = problem.build_solver(timestepper)
 solver.stop_sim_time = stop_sim_time
 
 # Initial conditions
-b.fill_random('g', seed=42, distribution='normal', scale=1e-3) # Random noise
-b['g'] *= z * (1-z) # Damp noise at walls
-b['g'] += 0.5*z*(1-z) # Add linear background
+#b.fill_random('g', seed=42, distribution='normal', scale=1e-3) # Random noise
+#b['r'] *= z*(1-z) #damp noise at walls
+b['g'] += 0.05*np.cos((1/2)*np.pi*(x-alpha))*np.sin(np.pi*z*alpha) #adding a perturbation
+b['g'] += 0.5*z*(1-z) # Add conduction state background
 
 # Analysis
 snapshots = solver.evaluator.add_file_handler('snapshots', sim_dt=0.25, max_writes=50)
@@ -154,8 +170,13 @@ volume = ((2*np.pi)/alpha)*2
 startup_iter = 10
 tVals = []
 NuVals = []
-NuFileName = 'NuData.npy'
-fluidDataFileName = 'runOutput/fluidData'
+allVertMeans = []
+NuFileName = 'Ra10000000Pr7alpha3.9989Nx512Nz256_T10_NuData.npy'
+vertMeanFileName = 'Ra10000000Pr7alpha3.9989Nx512Nz256_T10_vertMeans.npy'
+fluidDataFileName = 'Ra10000000Pr7alpha3.9989Nx512Nz256_T10_runOutput/fluidData'
+
+#NuFileName = 'testOut.npy'
+#fluidDataFileName = 'testOut_fluid/fluidData'
 
 try:
     logger.info('Starting main loop')
@@ -163,24 +184,41 @@ try:
         timestep = CFL.compute_timestep()
         solver.step(timestep)
         flow_Nu = calcNu(b)
+        #vertMeans = getVerticalMeans(b)
+        #allVertMeans.append(vertMeans)
+        tVals.append(solver.sim_time)
+        NuVals.append(flow_Nu)
+        #writeAllVertMeans(vertMeanFileName,allVertMeans)
+        writeNu(NuFileName,tVals,NuVals)
         if (solver.iteration-1) % 10 == 0:
             #writeNu(NuFileName,tVals,NuVals)
             #max_Re = flow.max('Re')
             #logger.info('Iteration=%i, Time=%e, dt=%e, max Re=%f' %(solver.iteration, solver.sim_time, timestep, max_Re))
             logger.info('Iteration=%i, Time=%e, dt=%e, Nu=%f' %(solver.iteration, solver.sim_time, timestep, flow_Nu))
-        #if (solver.iteration-1) % 100 == 0:
-            #fileName = fluidDataFileName + str(round(10000*solver.sim_time)/10000) + '.npy'
-            #write = writeFields(fileName,solver.sim_time,b,u,v)
-            #if write == 0:
-                #print('fields are not writing')
-        tVals.append(solver.sim_time)
-        NuVals.append(flow_Nu)
+        if (solver.iteration-1) % 100 == 0:
+            writeNu(NuFileName,tVals,NuVals)
+            fileName = fluidDataFileName + str(round(100000*solver.sim_time)/100000) + '.npy'
+            write = writeFields(fileName,solver.sim_time,b,u,v)
+            if write == 0:
+                print('fields are not writing')
+        #if (solver.iteration-1) % 1000 == 0:
+            #writeNu(NuFileName,tVals,NuVals)
+            #writeAllVertMeans(vertMeanFileName,allVertMeans)
 except:
     logger.error('Exception raised, triggering end of main loop.')
     raise
 finally:
     solver.log_stats()
-    
+
+#fileName = fluidDataFileName + str(round(10000*solver.sim_time)/10000) + '.npy'
+#writeFields(fileName,solver.sim_time,b,u,v)
+vertMeans = getVerticalMeans(b)
+allVertMeans.append(vertMeans)
+writeAllVertMeans(vertMeanFileName,allVertMeans)
+
+
+writeNu(NuFileName,tVals,NuVals)
+
 def plot(field):
     field.change_scales(1)
     X,Z = np.meshgrid(x.ravel(),z.ravel())
