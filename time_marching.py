@@ -53,13 +53,13 @@ def writeFields(fileName,time,b_var,u_var,v_var):
 #Lx, Lz = 4, 1
 #Lz = 2
 alpha = 3.9989
-Nx, Nz = 512, 256
+Nx, Nz = 64, 32
 Rayleigh = 10000000
 Prandtl = 7
 dealias = 3/2
-stop_sim_time = 10
+stop_sim_time = 0.2
 timestepper = d3.RK443
-max_timestep = 0.00001
+max_timestep = 0.0001
 dtype = np.float64
 
 # Bases
@@ -156,26 +156,30 @@ CFL.add_velocity(u*ex+v*ez)
 #solver.print_subproblem_ranks(dt=max_timestep)
 
 
+##volume of box
+volume = ((2*np.pi)/alpha)*2
 # Flow properties
 flow = d3.GlobalFlowProperty(solver, cadence=10)
 #flow.add_property(np.sqrt(d3.dot(u,u))/nu, name='Re')
-flow.add_property(1 + b*v/kappa,name='Nu')
-
-
-##volume of box
-volume = ((2*np.pi)/alpha)*2
-
+flow.add_property(b,name='TAvg')
+#flow_TAvg = flow.volume_integral('<T>')/volume
 
 # Main loop
 startup_iter = 10
 tVals = []
 NuVals = []
 allVertMeans = []
-NuFileName = 'Ra10000000Pr7alpha3.9989Nx512Nz256_T10_NuData.npy'
-vertMeanFileName = 'Ra10000000Pr7alpha3.9989Nx512Nz256_T10_vertMeans.npy'
-fluidDataFileName = 'Ra10000000Pr7alpha3.9989Nx512Nz256_T10_runOutput/fluidData'
+
+
+
+genFileName = 'Ra'+str(Ra)+'Pr'+str(Pr)+'alpha'+str(alpha)+'Nx'+str(Nx)+'Nz'+str(Nz)+'_T' + str(stop_sim_time)
+auxDataFile = genFileName + '_auxData/'
+NuFileName = auxDataFile + genFileName + '_NuData.npy'
+vertMeanFileName = auxDataFile + genFileName + '_vertMeans.npy'
+fluidDataFileName = genFileName + '_runOutput/fluidData'
 
 #NuFileName = 'testOut.npy'
+#vertMeanFileName = 'testOut_vertMeans.npy'
 #fluidDataFileName = 'testOut_fluid/fluidData'
 
 try:
@@ -184,6 +188,7 @@ try:
         timestep = CFL.compute_timestep()
         solver.step(timestep)
         flow_Nu = calcNu(b)
+        flow_TAvg = flow.volume_integral('TAvg')/volume
         #vertMeans = getVerticalMeans(b)
         #allVertMeans.append(vertMeans)
         tVals.append(solver.sim_time)
@@ -194,7 +199,7 @@ try:
             #writeNu(NuFileName,tVals,NuVals)
             #max_Re = flow.max('Re')
             #logger.info('Iteration=%i, Time=%e, dt=%e, max Re=%f' %(solver.iteration, solver.sim_time, timestep, max_Re))
-            logger.info('Iteration=%i, Time=%e, dt=%e, Nu=%f' %(solver.iteration, solver.sim_time, timestep, flow_Nu))
+            logger.info('Iteration=%i, Time=%e, dt=%e, Nu=%f, <T>=%f' %(solver.iteration, solver.sim_time, timestep, flow_Nu, flow_TAvg))
         if (solver.iteration-1) % 100 == 0:
             writeNu(NuFileName,tVals,NuVals)
             fileName = fluidDataFileName + str(round(100000*solver.sim_time)/100000) + '.npy'

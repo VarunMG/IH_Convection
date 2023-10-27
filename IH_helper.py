@@ -28,7 +28,7 @@ class Laplacian_Problem:
         self.coords = d3.CartesianCoordinates('x', 'z')
         self.dist = d3.Distributor(self.coords, dtype=dtype)
         self.xbasis = d3.RealFourier(self.coords['x'], size=self.Nx, bounds=(-1*np.pi/self.alpha, np.pi/self.alpha))
-        self.zbasis = d3.Chebyshev(self.coords['z'], size=self.Nz, bounds=(-1, 1))
+        self.zbasis = d3.Chebyshev(self.coords['z'], size=self.Nz, bounds=(0, 1))
         
         u = self.dist.Field(name='u', bases=(self.xbasis, self.zbasis))
         v = self.dist.Field(name='v', bases=(self.xbasis, self.zbasis))
@@ -52,7 +52,7 @@ class Laplacian_Problem:
         self.problem.add_equation("lap(v) + lift(tau_1,-1) + lift(tau_2,-2) = phi")
         self.problem.add_equation("dx(u) + dz(v) + lift(tau_1,-1) = 0",condition='nx!=0')
         self.problem.add_equation("u=0",condition='nx==0')
-        self.problem.add_equation("v(z=-1) = 0")
+        self.problem.add_equation("v(z=0) = 0")
         self.problem.add_equation("v(z=1) = 0")
         
         self.solver = self.problem.build_solver()
@@ -430,7 +430,7 @@ def stateToArrs(X,Nx,Nz):
     return phiArr, bArr
 
 def Gt(X,T,problem):
-    print("being called!")
+    logger.info("flow map called")
     phiArr, bArr = stateToArrs(X,problem.Nx,problem.Nz)
     uArr, vArr = problem.phi_lap.getVel(phiArr)
     problem.time = 0
@@ -438,9 +438,10 @@ def Gt(X,T,problem):
     problem.u.load_from_global_grid_data(uArr)
     problem.v.load_from_global_grid_data(vArr)
     problem.b.load_from_global_grid_data(bArr)
-    problem.solve_system(T,False, False, True)
+    problem.solve_system(T)
     Gt_Vec = probToStateVec(problem)
     Gt_Vec = (Gt_Vec - X)/T
+    logger.info("error computed: " + str(np.linalg.norm(Gt_Vec)))
     return Gt_Vec
 
 def jac_approx(X,dX,F,T,problem):
@@ -461,35 +462,51 @@ def findSteadyState(problem,guess,T,tol,max_iters,write):
     #T is time we are integrating out to
     #tol is tolerance for Newton method 
     #max_iters is max Newton iterations that will be done
-    err = 1e10
+    #err = 1e10
+    X = guess
+    err = np.linalg.norm(Gt(X,T,problem))
+    logger.info("starting error: %f",err)
     iters = 0
 
     Nx = problem.Nx
     Nz = problem.Nz
-
-    X = guess
     while err > tol and iters < max_iters:
+        logger.info("-------------")
+        logger.info("At iteration: " + str(iters))
+        f = open("optimizationStatus.txt","a")
+        f.write("starting iteration " + str(iters) + '\n')
+        f.write("------------------")
+        f.close()
         if write == 'y':
             print("iter: ",iters)
             print(X)
             print("-------------")
-        print("made it here 1")
+        #print("made it here 1")
         F = -1*Gt(X,T,problem)
-        print("made it here 2")
+        #print("made it here 2")
         A = lambda dX : jac_approx(X,dX,F,T,problem)
         A_mat = LinearOperator((2*Nx*Nz,2*Nx*Nz),A)
+        logger.info("entering gmres")
         delta_X,code =gmres(A_mat,F,tol=1e-3)
-        print("made it here 3")
+        f = open("optimizationStatus.txt","a")
+        f.write("made it past gmres in iteration " + str(iters) + '\n')
+        f.write("------------------")
+        f.close()
+        #print("made it here 3")
         #print(delta_X)
         if code != 0:
             raise("gmres did not converge")
         X= X+delta_X
         logging.info("Completed iteration: %i", iters)
         iters += 1
-        print("made it here 4")
+        #print("made it here 4")
+        logger.info("calculating error")
         err = np.linalg.norm(Gt(X,T,problem))
-        print("made it here 5")
-        print("---------------")
+        logger.info("error=%f", err)
+        #print("made it here 5")
+        #print("---------------")
+        logger.info("completed iteration")
+    logger.info("loop over!")
     phiStead, bStead = stateToArrs(X,Nx,Nz)
     problem.phi.load_from_global_grid_data(phiStead)
     problem.b.load_from_global_grid_data(bStead)
