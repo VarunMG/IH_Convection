@@ -487,7 +487,7 @@ def findSteadyState(problem,guess,T,tol,max_iters,write):
         A = lambda dX : jac_approx(X,dX,F,T,problem)
         A_mat = LinearOperator((2*Nx*Nz,2*Nx*Nz),A)
         logger.info("entering gmres")
-        delta_X,code =gmres(A_mat,F,tol=1e-3)
+        delta_X,code =gmres(A_mat,F,tol=1e-2)
         f = open("optimizationStatus.txt","a")
         f.write("made it past gmres in iteration " + str(iters) + '\n')
         f.write("------------------")
@@ -549,6 +549,10 @@ def follow_branch(Pr,alpha,Ra_start,Ra_end,Ra_step, Nx, Nz, startingGuess, start
         steady_phi = steady.phi.allgather_data('g')
         guess = arrsToStateVec(steady_phi, steady_b)
         dt = steady.time_step
+        print(RaVals)
+        print(Nu_Vals)
+    print("loop over")
+    print("-------")
     print(RaVals)
     print(Nu_Vals)
     return RaVals, Nu_Vals, steady_states
