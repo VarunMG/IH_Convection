@@ -1,4 +1,4 @@
-from RBC_helper import *
+from IH_helper import *
 from scipy import optimize
 
 ######################################
@@ -25,14 +25,14 @@ def interpFields(field,Nx1,Nz1, Nx2,Nz2):
 ### finding steady state ###
 #########################
 
-def probToStateVec(RBCProb):
-    Nx = RBCProb.Nx
-    Nz = RBCProb.Nz
+def probToStateVec(IHProb):
+    Nx = IHProb.Nx
+    Nz = IHProb.Nz
     
-    RBCProb.phi.change_scales(1)
-    RBCProb.b.change_scales(1)
-    bArr = RBCProb.b.allgather_data('g')
-    phiArr = RBCProb.phi.allgather_data('g')
+    IHProb.phi.change_scales(1)
+    IHProb.b.change_scales(1)
+    bArr = IHProb.b.allgather_data('g')
+    phiArr = IHProb.phi.allgather_data('g')
 
     X = np.zeros(2*Nx*Nz)
     bArr = bArr.flatten()
@@ -221,7 +221,7 @@ def follow_branch(Pr,alpha,Ra_start,num_steps,Ra_step, Nx, Nz, startingGuess, st
     dt = starting_dt
     filename_end = 'Pr'+str(Pr)+'alpha'+str(alpha)+'Nx' + str(Nx) + 'Nz' + str(Nz) + '_SS.npy'
     for Ra in RaVals:
-        steady = RBC_Problem(Ra,Pr,alpha,Nx,Nz,time_step=dt)
+        steady = IH_Problem(Ra,Pr,alpha,Nx,Nz,time_step=dt)
         steady.initialize()
         steady_vec = findSteadyState(steady, guess, 2, tol, 50, False)
         #print('Ra= ',Ra)
@@ -265,7 +265,7 @@ def findOptimalAlpha(Ra,Pr,Nx,Nz,starting_alpha,alpha_step,startingGuess,dt,tol,
         print(alpha_Vals)
         print("Nu vals calculated so far")
         print(Nu_Vals)
-        steady = RBC_Problem(Ra,Pr,alpha,Nx,Nz,time_step=dt)
+        steady = IH_Problem(Ra,Pr,alpha,Nx,Nz,time_step=dt)
         steady.initialize()
         steadystate_iters = findSteadyState(steady, guess, 2, tol, 50, False)
         print('alpha=',alpha)
@@ -299,7 +299,7 @@ def findOptimalAlpha(Ra,Pr,Nx,Nz,starting_alpha,alpha_step,startingGuess,dt,tol,
         alphaMax = -1*quadInterp[1]/(2*quadInterp[0])
         NuMax = quadInterp[0]*alphaMax**2 + quadInterp[1]*alphaMax + quadInterp[2]
         if outputOpt:
-            steady = RBC_Problem(Ra,Pr,alphaMax,Nx,Nz,time_step=dt)
+            steady = IH_Problem(Ra,Pr,alphaMax,Nx,Nz,time_step=dt)
             steady.initialize()
             steadystate_iters = findSteadyState(steady,guess,2,tol,50,False)
             fileName = 'Ra'+str(Ra)+'Pr'+str(Pr)+'_optimalState.npy'
