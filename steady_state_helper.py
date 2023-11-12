@@ -209,7 +209,7 @@ def findSteadyState(problem,guess,T,tol,max_iters,write):
 #    problem.v.load_from_global_grid_data(vStead)
 #    return iters
 
-def follow_branch(Pr,alpha,Ra_start,num_steps,Ra_step, Nx, Nz, startingGuess, starting_dt, tol):
+def follow_branch(Pr,alpha,Ra_start,num_steps,Ra_step, Nx, Nz, startingGuess, starting_dt, T,tol):
     #Ra_start is starting Rayleigh number
     #Ra_end is the ending Rayleigh number
     #Ra_step is the step in Ra taken when increasing Ra
@@ -223,7 +223,7 @@ def follow_branch(Pr,alpha,Ra_start,num_steps,Ra_step, Nx, Nz, startingGuess, st
     for Ra in RaVals:
         steady = IH_Problem(Ra,Pr,alpha,Nx,Nz,time_step=dt)
         steady.initialize()
-        steady_vec = findSteadyState(steady, guess, 2, tol, 50, False)
+        steady_vec = findSteadyState(steady, guess, T, tol, 50, False)
         #print('Ra= ',Ra)
         #print('steady state found . Iters = ', iters)
         #steady_states.append(steady)
